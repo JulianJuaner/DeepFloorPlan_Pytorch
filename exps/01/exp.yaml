@@ -1,23 +1,24 @@
-NAME: "floor_baseline"
+NAME: floor_baseline
+FOLDER: ./exps/01/
 MODEL:
   backbone:
     type: HRNetW18SmallV2
-  weights: /home/julianzhang/projects/SMore-Segmentation/pretrained_model/hrnet_w18_small_model_v2.pth
+  weights: /home/user/julianjuaner/research/pretrain/hrnet_w18_small_model_v2.pth
   head:
     type: HRHead
+    in_index: [0, 1, 2, 3]
+    final_conv_kernel: 1
     with_se_cat: True
+    relu_inplace: True
+    layers: 3
 
   loss:
-    - type: DiceCustom
-      dice_pow: [2, 3, 3, 3, 3, 3, 3]
-      weights: 2.0
-    - type: BootstrapCE
-      weights: 0.4
+    - type: CE
 
   dropout: 0.0
   channels: 3
-  num_classes: 7
-  ignore_label: 7
+  num_classes: 9
+  ignore_label: 9
 
 DATA:
   preprocessor:
@@ -41,27 +42,29 @@ DATA:
   train_data:
     type: FloorPlanDataset
     data_name: train
+    mode: training
     layers: 3
-    root: '/home/julianzhang/datasets/5210/'
+    root: '/home/user/julianjuaner/research/floor/data/jp/'
     data_path:
-        - /home/julianzhang/projects/SMore-Segmentation/exps_julian/poc/06-floorplan/lists/train.txt
+        - '/home/user/julianjuaner/research/floor/data/jp/train_list.txt'
       
   eval_data:
-    - type: FloorPlanDataset
-      data_name: val
-      layers: 3
-      root: '/home/julianzhang/datasets/5210/'
-      data_path:
-        - /home/julianzhang/projects/SMore-Segmentation/exps_julian/poc/06-floorplan/lists/test.txt
+    type: FloorPlanDataset
+    data_name: val
+    layers: 3
+    mode: evaluate
+    root: '/home/user/julianjuaner/research/floor/data/jp/'
+    data_path:
+      - '/home/user/julianjuaner/research/floor/data/jp/val_list.txt'
 
-    
   test_data:
-    - type: FloorPlanDataset
-      data_name: test
-      layers: 3
-      root: '/home/julianzhang/datasets/5210/'
-      data_path:
-        - /home/julianzhang/projects/SMore-Segmentation/exps_julian/poc/06-floorplan/lists/test.txt
+    type: FloorPlanDataset
+    data_name: test
+    mode: test
+    layers: 3
+    root: '/home/user/julianjuaner/research/floor/data/jp/'
+    data_path:
+      - '/home/user/julianjuaner/research/floor/data/jp/test_list.txt'
 
 evaluate:
   evaluators:
@@ -80,6 +83,8 @@ TRAIN:
     max_iter: 40000
     power: 0.9
     warmup_iter: 700
+  enc_lr_factor: 1.0
+  dec_lr_factor: 2.0
   data_argumentation:
     - type: RandomRotation
       prob: 0.3
@@ -94,17 +99,19 @@ TRAIN:
     - type: RandomScale
       scale: [0.9, 1.1]
       prob: 0.7
+      hw_prob: 0.5
     - type: RandomCrop
       output_size: [512, 512]
     - type: ColorJitter
       brightness: 0.4
       contrast: 0.4
       prob: 0.6
+      saturation: 0.0
 
-  max_iter: 40000
-    ckpt_freq: 2000 # the same as eval freq.
-    print_freq: 50
-    batch_size_per_gpu: 16
+  max_iter: 20000
+  ckpt_freq: 2000 # the same as eval freq.
+  print_freq: 50
+  batch_size_per_gpu: 16
 
 EVAL:
   type: SimpleInference

@@ -1,8 +1,11 @@
 import sys
 import os
-
+import cv2
 import torch
+import numpy as np
+from torchvision import transforms
 from torch.utils.data import Dataset
+from sourcecode.dataset.transform import custom_transform
 
 FloorPlanDataset_cfg = {
     'type': 'FloorPlanDataset',
@@ -18,8 +21,6 @@ FloorPlanDataset_cfg = {
         [255, 255, 255],  # extra label for wall line
         [77, 77, 77] # ignore
     ],
-    'layers': 1,
-    'mode': 'train'
 }
 
 class FloorPlanDataset(Dataset):
@@ -27,7 +28,7 @@ class FloorPlanDataset(Dataset):
     Dataset for Floor Plan (r2v).
     """
 
-    def __init__(self, opts):
+    def __init__(self, opts, full_cfg):
         """
         Args:
             data_name: dataset name
@@ -36,10 +37,16 @@ class FloorPlanDataset(Dataset):
             **kwargs:
         """
         self.opts = opts
+        self.root = self.opts.root
+        self.mode = self.opts.mode
         self.color_maps = FloorPlanDataset_cfg['color_maps']
-        self.layers = opts.floor_plan_layers
-        self.mode = self.kwargs.get('mode')
+        self.layers = opts.layers
+        self.data_path = opts.data_path
         self.data_list = self._read_data_list(self.data_path)
+        self.full_cfg = full_cfg
+        self.mean = full_cfg.DATA.mean
+        self.std = full_cfg.DATA.std
+        self.value_scale = full_cfg.DATA.value_scale
 
     def _read_data_list(self, data_path):
         data_list = []
@@ -71,12 +78,10 @@ class FloorPlanDataset(Dataset):
         if self.root is not None:
             img_path = '{}/{}'.format(self.root, img_path)
             mask_path = '{}/{}'.format(self.root, mask_path)
-        image = cv2.imread(img_path, 0 if self.in_channels == 1 else 1)
+        image = cv2.imread(img_path, 1)
         if image is None:
             logger.error("{} doesn't exist.".format(img_path))
             raise FileExistsError(img_path)
-        if self.in_channels != 1 and self.in_chn_type == 'RGB':
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if os.path.exists(mask_path):
             basename = img_path[:-10]
             room = cv2.cvtColor(cv2.imread(basename + '_rooms.png', 1), cv2.COLOR_BGR2RGB)
@@ -87,7 +92,7 @@ class FloorPlanDataset(Dataset):
                 # add ignore if training.
                 binary = np.zeros(image.shape[:2])
                 binary[(room != [0, 0, 0]).all(2)] = 255
-                dilate = cv2.dilate(binary, np.ones(3,3), 2)
+                dilate = cv2.dilate(binary, np.ones((3,3)), 2)
                 binary = dilate - binary
                 room[binary != 0 ] = [77, 77, 77]
 
@@ -98,24 +103,34 @@ class FloorPlanDataset(Dataset):
         else:
             mask = np.array(np.zeros(image.shape[:2]), dtype=np.uint8)
 
-        self._check_shape(image, mask, img_path, mask_path)
-        for func in self.preprocessor_list:
-            image, mask = func(image, mask)
-        for func in self.argumentation_list:
-            image, mask = func(image, mask)
-        org_image, mask = self._to_tensor(image, mask)
+        for func in self.full_cfg.DATA.preprocessor:
+            image, mask = custom_transform(func, image, mask)
+        for func in self.full_cfg.TRAIN.data_argumentation:
+            image, mask = custom_transform(func, image, mask)
+
+        org_image = torch.from_numpy(image.transpose((2, 0, 1))).float()
+        mask = torch.from_numpy(mask).long()
+
         image, mask = TorchNormalize(
             mean=self.mean, std=self.std)(org_image, mask)
+        # print(np.unique(mask))
         return {
             'imgs':
             image.float(),
             'org_imgs':
-            (org_image.float() / (self.value_scale / 255))[[2, 1, 0], :, :]
-            if self.in_channels == 3 else org_image.float() /
-            (self.value_scale / 255),
+            (org_image.float() / (self.value_scale / 255))[[2, 1, 0], :, :],
             'targets':
             mask.long(),
             'img_path':
             img_path
         }
 
+class TorchNormalize:
+
+    def __init__(self, mean, std, **kwargs):
+        self.mean = mean if type(mean) is list else [mean]
+        self.std = std if type(std) is list else [std]
+
+    def __call__(self, img, mask, **kwargs):
+        img = transforms.Normalize(self.mean, self.std)(img)
+        return img, mask
