@@ -1,7 +1,7 @@
 from sourcecode.model import HRNetW18SmallV2, FloorHead
 from sourcecode.dataset import FloorPlanDataset
 from sourcecode.configs import make_config, Options
-from sourcecode.utils.optim_loss import adjust_learning_rate
+from sourcecode.utils.optim_loss import adjust_learning_rate, compute_acc
 from torch import optim
 from torch.utils.data import DataLoader
 import torch.nn as nn
@@ -39,7 +39,7 @@ def train(cfg):
             num_workers=0,
         )
     
-    model = FloorPlanModel(cfg)
+    model = FloorPlanModel(cfg).train()
     model.cuda()
     enc_optimizer = optim.SGD(model.backbone.parameters(), lr=cfg.TRAIN.optimizer.lr, momentum=0.9)
     dec_optimizer = optim.SGD(model.head.parameters(), lr=cfg.TRAIN.optimizer.lr, momentum=0.9)
@@ -60,13 +60,53 @@ def train(cfg):
             loss.backward()
             enc_optimizer.step()
             dec_optimizer.step()
-            if iteration % cfg.TRAIN.ckpt_freq == 0 and iteration != 0:
-                print(iteration, 'saving model')
-                torch.save(model.state_dict(), '{}ckpt{}.pth'.format(
-                        cfg.FOLDER,
-                        iteration))
+
+            if iteration % cfg.TRAIN.eval_freq == 0 and iteration != 0:
+                # evaluation.
+                if iteration % cfg.TRAIN.ckpt_freq == 0:
+                    print(iteration, 'saving model')
+                    torch.save(model.state_dict(), '{}ckpt{}.pth'.format(
+                            cfg.FOLDER,
+                            iteration))
+                            
+                model.eval()
+                eval_iter = iter(eval_loader)
+                acc_sum = torch.zeros((cfg.MODEL.num_classes+1)).cuda()
+                pixel_sum = torch.zeros((cfg.MODEL.num_classes+1)).cuda()
+                print('start evaluation.')
+                for eval_step in range(len(eval_iter)):
+                    eval_data = next(eval_iter)
+                    res = model(eval_data['imgs'].cuda())
+                    acc_sum, pixel_sum = compute_acc(res, eval_data['targets'].cuda(), acc_sum, pixel_sum)
+
+                acc_value = []
+                for i in range(res.shape[1]):
+                    if acc_sum[i]>10:
+                        acc_value.append((acc_sum[i].float()+1e-10)/(pixel_sum[i].float()+1e-10))
+
+                acc_class = sum(acc_value)/len(acc_value)
+                acc_total = (acc_sum[-1].float()+1e-10)/(pixel_sum[-1].float()+1e-10)
+                print('iter', iteration,
+                         'eval_class_acc: %.2f'%(acc_class.item()*100),
+                         'eval_overall_acc: %.2f'%(acc_total.item()*100)
+                         )
+                model.train()
+
+
             if iteration % cfg.TRAIN.print_freq == 0 and iteration != 0:
-                print('iter', iteration, 'train loss:', loss.item())
+                acc_sum, pixel_sum = compute_acc(res, data['targets'].cuda())
+                acc_value = []
+                for i in range(res.shape[1]):
+                    if acc_sum[i]>10:
+                        acc_value.append((acc_sum[i].float()+1e-10)/(pixel_sum[i].float()+1e-10))
+
+                acc_class = sum(acc_value)/len(acc_value)
+                acc_total = (acc_sum[-1].float()+1e-10)/(pixel_sum[-1].float()+1e-10)
+                print('iter', iteration, 'train loss: %.4f'%(loss.item()),
+                         'lr: %.5f'%(enc_optimizer.param_groups[0]['lr']),
+                         'class_acc: %.2f'%(acc_class.item()*100),
+                         'overall_acc: %.2f'%(acc_total.item()*100)
+                         )
             iteration += 1
 
         

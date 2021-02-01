@@ -23,7 +23,7 @@ MODEL:
 DATA:
   preprocessor:
     - type: Rescale
-      output_size: [512, 512]
+      output_size: [768, 768]
       # [width, height]
   mean: [123.675, 116.28, 103.53]
   std: [58.395, 57.12, 57.375]
@@ -80,9 +80,9 @@ TRAIN:
     lr: 0.01
   lr_scheduler:
     type: PolyLR
-    max_iter: 40000
+    max_iter: 20000
     power: 0.9
-    warmup_iter: 700
+    warmup_iter: 500
   enc_lr_factor: 1.0
   dec_lr_factor: 2.0
   data_argumentation:
@@ -97,11 +97,11 @@ TRAIN:
     - type: RandomVerticalFlip
       prob: 0.5
     - type: RandomScale
-      scale: [0.9, 1.1]
+      scale: [0.8, 1.2]
       prob: 0.7
       hw_prob: 0.5
     - type: RandomCrop
-      output_size: [512, 512]
+      output_size: [768, 768]
     - type: ColorJitter
       brightness: 0.4
       contrast: 0.4
@@ -110,8 +110,9 @@ TRAIN:
 
   max_iter: 20000
   ckpt_freq: 2000 # the same as eval freq.
-  print_freq: 50
-  batch_size_per_gpu: 16
+  eval_freq: 200
+  print_freq: 10
+  batch_size_per_gpu: 24
 
 EVAL:
   type: SimpleInference
