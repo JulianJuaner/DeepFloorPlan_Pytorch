@@ -2,6 +2,7 @@ import sys
 import os
 import cv2
 import torch
+import random
 import numpy as np
 from torchvision import transforms
 from torch.utils.data import Dataset
@@ -58,7 +59,6 @@ class FloorPlanDataset(Dataset):
                         continue
                     img_path = line
                     mask_path = line[:-10] + '_rooms.png'
-                    # logger.info("{}".format(mask_path))
                     data_list.append((img_path, mask_path))
         return data_list
 
@@ -71,6 +71,13 @@ class FloorPlanDataset(Dataset):
         for i in range(len(self.color_maps)):
             res_mask[(mask_img == self.color_maps[i]).all(2)] = i
         # logger.info("{}".format(np.unique(res_mask)))
+        return res_mask
+
+    def to_color(self, mask_img):
+        h, w = mask_img.shape[:2]
+        res_mask = np.zeros((h, w, 3), dtype=np.uint8)
+        for i in range(len(self.color_maps)):
+            res_mask[mask_img == i] = self.color_maps[i]
         return res_mask
 
     def __getitem__(self, item):
@@ -102,11 +109,16 @@ class FloorPlanDataset(Dataset):
             mask = self.mask_convert(room)
         else:
             mask = np.array(np.zeros(image.shape[:2]), dtype=np.uint8)
-
+        
         for func in self.full_cfg.DATA.preprocessor:
             image, mask = custom_transform(func, image, mask)
-        for func in self.full_cfg.TRAIN.data_argumentation:
-            image, mask = custom_transform(func, image, mask)
+
+        if self.mode == 'training':
+            for func in self.full_cfg.TRAIN.data_argumentation:
+                image, mask = custom_transform(func, image, mask)
+
+        if random.random()<0.1:
+            cv2.imwrite('datavis.png', np.hstack((image, self.to_color(mask))))
 
         org_image = torch.from_numpy(image.transpose((2, 0, 1))).float()
         mask = torch.from_numpy(mask).long()
@@ -134,3 +146,11 @@ class TorchNormalize:
     def __call__(self, img, mask, **kwargs):
         img = transforms.Normalize(self.mean, self.std)(img)
         return img, mask
+
+def to_color(mask_img):
+    color_maps = FloorPlanDataset_cfg['color_maps']
+    h, w = mask_img.shape[:2]
+    res_mask = np.zeros((h, w, 3), dtype=np.uint8)
+    for i in range(len(color_maps)):
+        res_mask[mask_img == i] = color_maps[i]
+    return res_mask

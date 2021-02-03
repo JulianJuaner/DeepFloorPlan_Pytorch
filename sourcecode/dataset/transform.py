@@ -73,7 +73,7 @@ def Rescale(cfg, img, mask):
         left,
         right,
         cv2.BORDER_CONSTANT,
-        value=[0, 0, 0])
+        value=[255, 255, 255])
     mask = cv2.copyMakeBorder(
         mask,
         top,
@@ -95,7 +95,7 @@ def RandomRotation(cfg, img, mask):
             matrix, (w, h),
             flags=cv2.INTER_LINEAR,
             borderMode=cv2.BORDER_CONSTANT,
-            borderValue=[0, 0, 0])
+            borderValue=[255, 255, 255])
         mask = cv2.warpAffine(
             mask,
             matrix, (w, h),
@@ -130,7 +130,7 @@ def RandomCrop(cfg, img, mask):
             pad_w_half,
             pad_w - pad_w_half,
             cv2.BORDER_CONSTANT,
-            value=[0, 0, 0])
+            value=[255, 255, 255])
 
         mask = cv2.copyMakeBorder(
             mask,

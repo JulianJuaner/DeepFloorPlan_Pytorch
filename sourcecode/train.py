@@ -1,25 +1,28 @@
-from sourcecode.model import HRNetW18SmallV2, FloorHead
-from sourcecode.dataset import FloorPlanDataset
+from sourcecode.model import HRNetW18SmallV2, build_head
+from sourcecode.dataset import FloorPlanDataset, to_color
 from sourcecode.configs import make_config, Options
 from sourcecode.utils.optim_loss import adjust_learning_rate, compute_acc
 from torch import optim
 from torch.utils.data import DataLoader
 import torch.nn as nn
+import numpy as np
 import argparse
 import torch
+import math
 import os
+import cv2
 
 class FloorPlanModel(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.backbone = HRNetW18SmallV2()
         self.backbone.load_state_dict(torch.load(cfg.MODEL.weights), strict=False)
-        self.head = FloorHead(cfg.MODEL.head)
+        self.head = build_head(cfg.MODEL.head)
         self.opts = cfg
 
     def forward(self, x):
         backbone_out = self.backbone(x)
-        return self.head(backbone_out, [512, 512])
+        return self.head(backbone_out, x.shape[2:])
 
 def train(cfg):
     train_dataset = FloorPlanDataset(cfg.DATA.train_data, cfg)
@@ -41,25 +44,32 @@ def train(cfg):
     
     model = FloorPlanModel(cfg).train()
     model.cuda()
-    enc_optimizer = optim.SGD(model.backbone.parameters(), lr=cfg.TRAIN.optimizer.lr, momentum=0.9)
-    dec_optimizer = optim.SGD(model.head.parameters(), lr=cfg.TRAIN.optimizer.lr, momentum=0.9)
-    loss_func = nn.CrossEntropyLoss(ignore_index=9).cuda()
+    enc_optimizer = optim.SGD(model.parameters(), lr=cfg.TRAIN.optimizer.lr, momentum=0.9, weight_decay=0.0005)
+    # dec_optimizer = optim.SGD(model.head.parameters(), lr=cfg.TRAIN.optimizer.lr, momentum=0.9, weight_decay=0.0005)
+    factors = [1429/1006, 1429/12.25, 1429/32.18, 1429/102.35,
+                                    1429/80.46, 1429/18.42, 1429/22.86, 1429/35.06,
+                                    1429/118.72]
+    for i in range(len(factors)):
+        factors[i] =  1 + math.log(factors[i])
+    loss_weight = torch.FloatTensor(factors)
+    loss_func = nn.CrossEntropyLoss(weight=loss_weight,ignore_index=9).cuda()
     num_epoch = cfg.TRAIN.max_iter//len(train_loader)
     iteration = 0
     for epoch in range(num_epoch):
         train_iter = iter(train_loader)
         for step in range(len(train_iter)):
-            model.zero_grad()
             adjust_learning_rate(enc_optimizer, iteration, cfg, cfg.TRAIN.enc_lr_factor)
-            adjust_learning_rate(dec_optimizer, iteration, cfg, cfg.TRAIN.dec_lr_factor)
+            # adjust_learning_rate(dec_optimizer, iteration, cfg, cfg.TRAIN.dec_lr_factor)
             data = next(train_iter)
             res = model(data['imgs'].cuda())
-            res = nn.functional.softmax(res, dim=1)
+            # res = nn.functional.softmax(res, dim=1)
             # print(res.shape, data['targets'].shape)
             loss = loss_func(res, data['targets'].cuda())
+            enc_optimizer.zero_grad()
+            # dec_optimizer.zero_grad()
             loss.backward()
             enc_optimizer.step()
-            dec_optimizer.step()
+            # dec_optimizer.step()
 
             if iteration % cfg.TRAIN.eval_freq == 0 and iteration != 0:
                 # evaluation.
@@ -68,22 +78,26 @@ def train(cfg):
                     torch.save(model.state_dict(), '{}ckpt{}.pth'.format(
                             cfg.FOLDER,
                             iteration))
-                            
+
                 model.eval()
                 eval_iter = iter(eval_loader)
                 acc_sum = torch.zeros((cfg.MODEL.num_classes+1)).cuda()
                 pixel_sum = torch.zeros((cfg.MODEL.num_classes+1)).cuda()
                 print('start evaluation.')
+                counter = 1
                 for eval_step in range(len(eval_iter)):
                     eval_data = next(eval_iter)
                     res = model(eval_data['imgs'].cuda())
                     acc_sum, pixel_sum = compute_acc(res, eval_data['targets'].cuda(), acc_sum, pixel_sum)
-
+                    _, mask = torch.max(res, dim=1)
+                    cv2.imwrite('./data/vis/' + str(counter) + '.png', np.hstack((eval_data['org_imgs'][0].numpy().transpose(1,2,0),
+                                to_color(mask[0].cpu().detach().numpy()))))
+                    counter += 1
                 acc_value = []
                 for i in range(res.shape[1]):
-                    if acc_sum[i]>10:
-                        acc_value.append((acc_sum[i].float()+1e-10)/(pixel_sum[i].float()+1e-10))
-
+                    acc_value.append((acc_sum[i].float()+1e-10)/(pixel_sum[i].float()+1e-10))
+                print(acc_sum)
+                print(pixel_sum)
                 acc_class = sum(acc_value)/len(acc_value)
                 acc_total = (acc_sum[-1].float()+1e-10)/(pixel_sum[-1].float()+1e-10)
                 print('iter', iteration,
@@ -97,9 +111,8 @@ def train(cfg):
                 acc_sum, pixel_sum = compute_acc(res, data['targets'].cuda())
                 acc_value = []
                 for i in range(res.shape[1]):
-                    if acc_sum[i]>10:
-                        acc_value.append((acc_sum[i].float()+1e-10)/(pixel_sum[i].float()+1e-10))
-
+                    acc_value.append((acc_sum[i].float()+1e-10)/(pixel_sum[i].float()+1e-10))
+                    
                 acc_class = sum(acc_value)/len(acc_value)
                 acc_total = (acc_sum[-1].float()+1e-10)/(pixel_sum[-1].float()+1e-10)
                 print('iter', iteration, 'train loss: %.4f'%(loss.item()),
