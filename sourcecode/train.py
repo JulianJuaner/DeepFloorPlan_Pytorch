@@ -33,6 +33,7 @@ def train(cfg):
             batch_size=cfg.TRAIN.batch_size_per_gpu, 
             shuffle=True,
             num_workers=4,
+            drop_last=True
         )
 
     eval_loader = DataLoader(
@@ -44,8 +45,8 @@ def train(cfg):
     
     model = FloorPlanModel(cfg).train()
     model.cuda()
-    enc_optimizer = optim.SGD(model.parameters(), lr=cfg.TRAIN.optimizer.lr, momentum=0.9, weight_decay=0.0005)
-    # dec_optimizer = optim.SGD(model.head.parameters(), lr=cfg.TRAIN.optimizer.lr, momentum=0.9, weight_decay=0.0005)
+    enc_optimizer = optim.SGD(model.backbone.parameters(), lr=cfg.TRAIN.optimizer.lr, momentum=0.9, weight_decay=0.0005)
+    dec_optimizer = optim.SGD(model.head.parameters(), lr=cfg.TRAIN.optimizer.lr, momentum=0.9, weight_decay=0.0005)
     factors = [1429/1006, 1429/12.25, 1429/32.18, 1429/102.35,
                                     1429/80.46, 1429/18.42, 1429/22.86, 1429/35.06,
                                     1429/118.72]
@@ -53,23 +54,29 @@ def train(cfg):
         factors[i] =  1 + math.log(factors[i])
     loss_weight = torch.FloatTensor(factors)
     loss_func = nn.CrossEntropyLoss(weight=loss_weight,ignore_index=9).cuda()
-    num_epoch = cfg.TRAIN.max_iter//len(train_loader)
+    num_epoch = cfg.TRAIN.max_iter//len(train_loader) + 1
     iteration = 0
     for epoch in range(num_epoch):
         train_iter = iter(train_loader)
         for step in range(len(train_iter)):
             adjust_learning_rate(enc_optimizer, iteration, cfg, cfg.TRAIN.enc_lr_factor)
-            # adjust_learning_rate(dec_optimizer, iteration, cfg, cfg.TRAIN.dec_lr_factor)
+            adjust_learning_rate(dec_optimizer, iteration, cfg, cfg.TRAIN.dec_lr_factor)
+
             data = next(train_iter)
             res = model(data['imgs'].cuda())
-            # res = nn.functional.softmax(res, dim=1)
-            # print(res.shape, data['targets'].shape)
-            loss = loss_func(res, data['targets'].cuda())
+            
+            if isinstance(res, list):
+                anneal_factor = iteration / cfg.TRAIN.max_iter
+                aux_loss = loss_func(res[1], data['targets'].cuda())*0.6*(1-anneal_factor) + 0.4
+                total_loss = loss_func(res[0], data['targets'].cuda())*(0.5 + 0.5*anneal_factor)
+                loss = aux_loss + total_loss
+            else:
+                loss = loss_func(res, data['targets'].cuda())
             enc_optimizer.zero_grad()
-            # dec_optimizer.zero_grad()
+            dec_optimizer.zero_grad()
             loss.backward()
             enc_optimizer.step()
-            # dec_optimizer.step()
+            dec_optimizer.step()
 
             if iteration % cfg.TRAIN.eval_freq == 0 and iteration != 0:
                 # evaluation.
@@ -88,6 +95,8 @@ def train(cfg):
                 for eval_step in range(len(eval_iter)):
                     eval_data = next(eval_iter)
                     res = model(eval_data['imgs'].cuda())
+                    if isinstance(res, list):
+                        res = res[0]
                     acc_sum, pixel_sum = compute_acc(res, eval_data['targets'].cuda(), acc_sum, pixel_sum)
                     _, mask = torch.max(res, dim=1)
                     cv2.imwrite('./data/vis/' + str(counter) + '.png', np.hstack((eval_data['org_imgs'][0].numpy().transpose(1,2,0),
@@ -107,7 +116,9 @@ def train(cfg):
                 model.train()
 
 
-            if iteration % cfg.TRAIN.print_freq == 0 and iteration != 0:
+            elif iteration % cfg.TRAIN.print_freq == 0 and iteration != 0:
+                if isinstance(res, list):
+                    res = res[0]
                 acc_sum, pixel_sum = compute_acc(res, data['targets'].cuda())
                 acc_value = []
                 for i in range(res.shape[1]):

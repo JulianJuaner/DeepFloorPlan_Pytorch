@@ -97,10 +97,13 @@ class FloorPlanDataset(Dataset):
 
             if self.mode == 'training':
                 # add ignore if training.
-                binary = np.zeros(image.shape[:2])
-                binary[(room != [0, 0, 0]).all(2)] = 255
-                dilate = cv2.dilate(binary, np.ones((3,3)), 2)
+                room_sum = np.sum(room, axis=-1)
+                binary = np.zeros(image.shape[:2]).astype(np.uint8)
+                binary[room_sum>=6] = 255
+                # cv2.imwrite('binary.png', np.hstack((cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR), room)))
+                dilate = cv2.dilate(binary, np.ones((5,5)), 2)
                 binary = dilate - binary
+                # cv2.imwrite('binary.png', binary)
                 room[binary != 0 ] = [77, 77, 77]
 
             room[wall == 255] = [255, 255, 255]

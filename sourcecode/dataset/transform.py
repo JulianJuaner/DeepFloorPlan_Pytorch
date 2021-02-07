@@ -81,7 +81,7 @@ def Rescale(cfg, img, mask):
         left,
         right,
         cv2.BORDER_CONSTANT,
-        value=[9])
+        value=[0])
     return img, mask
 
 def RandomRotation(cfg, img, mask):
@@ -101,7 +101,7 @@ def RandomRotation(cfg, img, mask):
             matrix, (w, h),
             flags=cv2.INTER_NEAREST,
             borderMode=cv2.BORDER_CONSTANT,
-            borderValue=9)
+            borderValue=0)
     return img, mask
 def RandomHorizontalFlip(cfg, img, mask):
     if random.random() < cfg.prob:
@@ -139,7 +139,7 @@ def RandomCrop(cfg, img, mask):
             pad_w_half,
             pad_w - pad_w_half,
             cv2.BORDER_CONSTANT,
-            value=9)
+            value=0)
 
     margin_h = max(img.shape[0] - cfg.output_size[1], 0)
     margin_w = max(img.shape[1] - cfg.output_size[0], 0)

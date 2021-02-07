@@ -1,16 +1,16 @@
-NAME: floor_baseline
-FOLDER: ./exps/01/
+NAME: floor_multi_branch_head
+FOLDER: ./exps/02/
 MODEL:
   backbone:
     type: HRNetW18SmallV2
   weights: /home/user/julianjuaner/research/pretrain/hrnet_w18_small_model_v2.pth
   head:
-    type: HRHead
+    type: ClassWareHead
     in_index: [0, 1, 2, 3]
     final_conv_kernel: 1
-    with_se_cat: True
+    avg_pool: True
     relu_inplace: True
-    layers: 3
+    key_channels: 128
 
   loss:
     - type: CE
@@ -23,7 +23,7 @@ MODEL:
 DATA:
   preprocessor:
     - type: Rescale
-      output_size: [768, 768]
+      output_size: [512, 512]
       # [width, height]
   mean: [123.675, 116.28, 103.53]
   std: [58.395, 57.12, 57.375]
@@ -55,7 +55,7 @@ DATA:
     mode: evaluate
     root: '/home/user/julianjuaner/research/floor/data/jp/'
     data_path:
-      - '/home/user/julianjuaner/research/floor/data/jp/val_list.txt'
+      - '/home/user/julianjuaner/research/floor/data/jp/test_list.txt'
 
   test_data:
     type: FloorPlanDataset
@@ -77,31 +77,31 @@ evaluate:
 TRAIN:
   optimizer:
     type: SGD
-    lr: 0.01
+    lr: 0.02
   lr_scheduler:
     type: PolyLR
     max_iter: 20000
     power: 0.9
     warmup_iter: 500
   enc_lr_factor: 1.0
-  dec_lr_factor: 2.0
+  dec_lr_factor: 5.0
   data_argumentation:
     - type: RandomRotation
-      prob: 0.3
+      prob: 0.1
       angle: [-10, 10]
     - type: RandomRotation
       prob: 0.3
       angle: [90, 90]
     - type: RandomHorizontalFlip
-      prob: 0.5
+      prob: 0.3
     - type: RandomVerticalFlip
-      prob: 0.5
+      prob: 0.3
     - type: RandomScale
       scale: [0.8, 1.2]
       prob: 0.7
       hw_prob: 0.5
     - type: RandomCrop
-      output_size: [768, 768]
+      output_size: [512, 512]
     - type: ColorJitter
       brightness: 0.4
       contrast: 0.4
@@ -112,7 +112,7 @@ TRAIN:
   ckpt_freq: 2000 # the same as eval freq.
   eval_freq: 200
   print_freq: 10
-  batch_size_per_gpu: 24
+  batch_size_per_gpu: 4
 
 EVAL:
   type: SimpleInference
