@@ -1,5 +1,5 @@
 import copy
-
+# Reference: Detectron2.
 def merge_dict(_default_dict, ref_dict):
     if type(_default_dict) is dict:
         default_dict = copy.deepcopy(_default_dict)

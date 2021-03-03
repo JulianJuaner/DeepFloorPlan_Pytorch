@@ -47,11 +47,11 @@ def train(cfg):
     model.cuda()
     enc_optimizer = optim.SGD(model.backbone.parameters(), lr=cfg.TRAIN.optimizer.lr, momentum=0.9, weight_decay=0.0005)
     dec_optimizer = optim.SGD(model.head.parameters(), lr=cfg.TRAIN.optimizer.lr, momentum=0.9, weight_decay=0.0005)
+    # class-wise loss weights.
     factors = [1429/1006, 1429/12.25, 1429/32.18, 1429/102.35,
-                                    1429/80.46, 1429/18.42, 1429/22.86, 1429/35.06,
-                                    1429/118.72]
+               1429/80.46, 1429/18.42, 1429/22.86, 1429/35.06, 1429/118.72]
     for i in range(len(factors)):
-        factors[i] =  1 + math.log(factors[i])
+        factors[i] = 1 + math.log(factors[i])
     loss_weight = torch.FloatTensor(factors)
     loss_func = nn.CrossEntropyLoss(weight=loss_weight,ignore_index=9).cuda()
     num_epoch = cfg.TRAIN.max_iter//len(train_loader) + 1
@@ -115,7 +115,6 @@ def train(cfg):
                          )
                 model.train()
 
-
             elif iteration % cfg.TRAIN.print_freq == 0 and iteration != 0:
                 if isinstance(res, list):
                     res = res[0]
@@ -132,9 +131,6 @@ def train(cfg):
                          'overall_acc: %.2f'%(acc_total.item()*100)
                          )
             iteration += 1
-
-        
-
 
 if "__main__" in __name__:
     # initialize exp configs.

@@ -2,7 +2,8 @@
 *.jpg
 *.off
 *DS*
-
+.vscode*
+*.zip
 .idea
 # Byte-compiled / optimized / DLL files
 __pycache__/

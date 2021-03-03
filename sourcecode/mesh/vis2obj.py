@@ -86,7 +86,6 @@ def get_furniture_info():
                             min_point_z = point_z
 
                     furniture_info[furniture].append(dict())
-                    # print(furniture_info[furniture])
                     furniture_info[furniture][-1]['name'] = os.path.join(sub_dir, off_path)
                     furniture_info[furniture][-1]['width'] = max_point_x - min_point_x
                     furniture_info[furniture][-1]['length'] = max_point_y - min_point_y
@@ -94,7 +93,7 @@ def get_furniture_info():
                     furniture_info[furniture][-1]['x_offset'] = -min_point_x
                     furniture_info[furniture][-1]['y_offset'] = -min_point_y
                     furniture_info[furniture][-1]['z_offset'] = -min_point_z
-                    # print(furniture_info[furniture][off_path])
+
     return furniture_info
 
 def determine_room_type(label, furniture_info):

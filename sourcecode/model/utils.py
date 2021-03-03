@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 BatchNorm = nn.BatchNorm2d
 
+# Utilization File:
+# Just Referencing Well Implemented Common Convolutional Blocks
+
 class SELayer(nn.Module):
 
     def __init__(self, channel, reduction=16):

@@ -30,13 +30,7 @@ class FloorPlanDataset(Dataset):
     """
 
     def __init__(self, opts, full_cfg):
-        """
-        Args:
-            data_name: dataset name
-            data_path: list of data path
-            root: the root path, it will be used as prefix for each image path and json path.
-            **kwargs:
-        """
+
         self.opts = opts
         self.root = self.opts.root
         self.mode = self.opts.mode
@@ -119,9 +113,6 @@ class FloorPlanDataset(Dataset):
         if self.mode == 'training':
             for func in self.full_cfg.TRAIN.data_argumentation:
                 image, mask = custom_transform(func, image, mask)
-
-        if random.random()<0.1:
-            cv2.imwrite('datavis.png', np.hstack((image, self.to_color(mask))))
 
         org_image = torch.from_numpy(image.transpose((2, 0, 1))).float()
         mask = torch.from_numpy(mask).long()

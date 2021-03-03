@@ -11,6 +11,7 @@ def build_head(head_cfg):
 
 BatchNorm = nn.BatchNorm2d
 
+# Reference: GitHub: HRNet/HRNet-Semantic-Segmentation
 class SpatialGather_Module(nn.Module):
     """
         Aggregate the context features according to the initial 
@@ -109,8 +110,6 @@ class ObjectAttentionBlock(nn.Module):
         context = context.permute(0, 2, 1).contiguous()
         context = context.view(batch_size, self.key_channels, *x.size()[2:])
         context = self.f_up(context)
-        if self.scale > 1:
-            context = F.interpolate(input=context, size=(h, w), mode='bilinear', align_corners=ALIGN_CORNERS)
 
         return context
 
