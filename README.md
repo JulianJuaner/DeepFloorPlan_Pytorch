@@ -12,3 +12,10 @@ ModelNet Dataset and r2v/jp should be placed in the `./data`.
 ```bash sourcecode/exp/02/inference.sh```
 ## MESH RECONSTRUCTION
 ```bash sourcecode/exp/02/mesh.sh```
+
+
+| Method |      OverallAcc    |  Class Average | 
+|--------|--------------------|----------------|
+| PAPER CLAIMED  | 0.90       |         0.89   |
+| HRNet          | 0.947      |         0.948  |
+| HRNet + OCR    | 0.959      |         0.947  | 
